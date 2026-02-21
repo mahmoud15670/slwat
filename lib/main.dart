@@ -1,20 +1,13 @@
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
-
 import 'package:hive_flutter/hive_flutter.dart';
-
 import 'package:http/http.dart' as http;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   await Hive.initFlutter();
-
   await Hive.openBox('quran');
-
   await Hive.openBox('settings');
-
   runApp(const MyApp());
 }
 
@@ -46,37 +39,28 @@ class QuranPage extends StatefulWidget {
 
 class _QuranPageState extends State<QuranPage> {
   final quranBox = Hive.box('quran');
-
   final settingsBox = Hive.box('settings');
-
   int pageNumber = 1;
-
   String startText = '';
-
   String endText = '';
-
+  List<String> fullPageText = [];
   bool isLoading = false;
-
   bool hasError = false;
 
   @override
   void initState() {
     super.initState();
-
     pageNumber = settingsBox.get('lastPage', defaultValue: 1);
-
     _loadPage(pageNumber);
   }
 
   Future<void> _loadPage(int page) async {
     setState(() {
       isLoading = true;
-
       hasError = false;
     });
 
     final saved = quranBox.get(page);
-
     if (saved != null) {
       _updateUI(saved);
     } else {
@@ -99,59 +83,100 @@ class _QuranPageState extends State<QuranPage> {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
 
-        final pageData = {
-          'start': data['pages'][0]['text'],
-          'end': data['pages'].last['text'],
-        };
+        if (data is Map<String, dynamic> && data['pages'] != null) {
+          // Create a list of verse texts
+          List<String> verses = [];
+          for (var verse in data['pages']) {
+            verses.add(_getVerseWithCircle(
+                verse['verse'], verse['text'])); // Add each verse's text
+          }
 
-        await quranBox.put(page, pageData);
+          final pageData = {
+            'fullPage': verses, // Store list of verse texts
+            'start': data['pages'][0]['text'], // النص الذي يبدأ به الصفحة
+            'end': data['pages'].last['text'], // النص الذي تنتهي به الصفحة
+          };
 
-        _updateUI(pageData);
+          await quranBox.put(page, pageData); // Save data to Hive
+          _updateUI(pageData); // Update UI
+        } else {
+          _showError('البيانات المستلمة ليست بتنسيق صحيح.');
+        }
       } else {
-        _showError(response.statusCode);
+        _showError('تعذر تحميل الصفحة. حالة: ${response.statusCode}');
       }
     } catch (e) {
-      _showError(e);
+      _showError('حدث خطأ في الاتصال: $e');
     }
+  }
+
+  String _getVerseWithCircle(int verseNumber, String verseText) {
+    // Create the verse text with the verse number inside the circle
+    return ' [$verseNumber] ' +
+        verseText; // Store just the text, including verse number
   }
 
   void _updateUI(Map data) {
     setState(() {
-      startText = data['start'];
-
-      endText = data['end'];
+      fullPageText =
+          List<String>.from(data['fullPage']); // Store verses as text
+      startText = data['start']; // Start text
+      endText = data['end']; // End text
     });
 
-    settingsBox.put('lastPage', pageNumber);
+    settingsBox.put('lastPage', pageNumber); // Save the page number in settings
   }
 
-  void _showError(code) {
+  void _showError(String message) {
     setState(() {
       hasError = true;
-
-      startText = '$code تعذر تحميل الصفحة حاليًا';
-
+      startText = message;
       endText = 'يرجى المحاولة مرة أخرى';
     });
   }
 
   void _nextPage() {
     pageNumber = pageNumber == 50 ? 1 : pageNumber + 1;
-
     _loadPage(pageNumber);
   }
 
   void _prevPage() {
     if (pageNumber > 1) {
       pageNumber--;
-
       _loadPage(pageNumber);
     }
   }
 
   String safeSubstring(String text, int length) {
-    if (text.length <= length) return text;
-    return text.substring(0, length);
+    return text.length <= length ? text : text.substring(0, length);
+  }
+
+  void _showFullPage() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          appBar: AppBar(
+            title: Text('صفحة $pageNumber كاملة'),
+          ),
+          body: Padding(
+            padding: const EdgeInsets.all(16),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: fullPageText.map((verseText) {
+                  return Text(
+                    verseText,
+                    style: const TextStyle(fontSize: 18),
+                    textAlign: TextAlign.right, // Right-align text for Arabic
+                  );
+                }).toList(), // Convert the list of texts into a list of Text widgets
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -178,9 +203,7 @@ class _QuranPageState extends State<QuranPage> {
                     const SizedBox(height: 50),
                     const Text(
                       'تبدأ الصفحة بقوله تعالى:',
-                      style: TextStyle(
-                        fontSize: 18.0,
-                      ),
+                      style: TextStyle(fontSize: 18.0),
                     ),
                     const SizedBox(height: 20),
                     Text(
@@ -191,9 +214,7 @@ class _QuranPageState extends State<QuranPage> {
                     const SizedBox(height: 40),
                     const Text(
                       'تنتهي الصفحة بقوله تعالى:',
-                      style: TextStyle(
-                        fontSize: 18.0,
-                      ),
+                      style: TextStyle(fontSize: 18.0),
                     ),
                     const SizedBox(height: 20),
                     Text(
@@ -232,7 +253,14 @@ class _QuranPageState extends State<QuranPage> {
         ),
         title: Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: [Text('صفحة $pageNumber')],
+          children: [
+            Text('صفحة $pageNumber'),
+            IconButton(
+              color: Theme.of(context).primaryColorLight,
+              onPressed: _showFullPage,
+              icon: const Icon(Icons.remove_red_eye),
+            ),
+          ],
         ),
       ),
     );
