@@ -112,8 +112,7 @@ class _QuranPageState extends State<QuranPage> {
 
   String _getVerseWithCircle(int verseNumber, String verseText) {
     // Create the verse text with the verse number inside the circle
-    return ' [$verseNumber] ' +
-        verseText; // Store just the text, including verse number
+    return ' [$verseNumber] $verseText'; // Store just the text, including verse number
   }
 
   void _updateUI(Map data) {
@@ -207,7 +206,7 @@ class _QuranPageState extends State<QuranPage> {
                     ),
                     const SizedBox(height: 20),
                     Text(
-                      '...' + safeSubstring(startText, 60),
+                      '...${safeSubstring(startText, 60)}',
                       textAlign: TextAlign.center,
                       style: const TextStyle(fontSize: 25),
                     ),
@@ -218,7 +217,7 @@ class _QuranPageState extends State<QuranPage> {
                     ),
                     const SizedBox(height: 20),
                     Text(
-                      '...' + safeSubstring(endText, 60),
+                      '...${safeSubstring(endText, 60)}',
                       textAlign: TextAlign.center,
                       style: const TextStyle(fontSize: 25),
                     ),
